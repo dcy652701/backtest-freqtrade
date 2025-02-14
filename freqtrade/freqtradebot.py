@@ -91,6 +91,8 @@ class FreqtradeBot(LoggingMixin):
 
         # Init objects
         self.config = config
+        self.user_address=self.config['user_address']
+        self.strategy_id=self.config['strategy_id']
         exchange_config: ExchangeConfig = deepcopy(config["exchange"])
         # Remove credentials from original exchange config to avoid accidental credential exposure
         remove_exchange_credentials(config["exchange"], True)
@@ -1231,6 +1233,8 @@ class FreqtradeBot(LoggingMixin):
             "open_date": trade.open_date_utc or datetime.now(timezone.utc),
             "current_rate": current_rate,
             "sub_trade": sub_trade,
+            "user_address": self.user_address,
+            "strategy_id": self.strategy_id,
         }
 
         # Send the message
@@ -1268,6 +1272,8 @@ class FreqtradeBot(LoggingMixin):
             "current_rate": current_rate,
             "reason": reason,
             "sub_trade": sub_trade,
+            "user_address": self.user_address,
+            "strategy_id": self.strategy_id,
         }
 
         # Send the message
@@ -2169,6 +2175,8 @@ class FreqtradeBot(LoggingMixin):
             "cumulative_profit": trade.realized_profit,
             "final_profit_ratio": trade.close_profit if not trade.is_open else None,
             "is_final_exit": trade.is_open is False,
+            "user_address": self.user_address,
+            "strategy_id": self.strategy_id,
         }
 
         # Send the message
@@ -2222,6 +2230,8 @@ class FreqtradeBot(LoggingMixin):
             "reason": reason,
             "sub_trade": sub_trade,
             "stake_amount": trade.stake_amount,
+            "user_address": self.user_address,
+            "strategy_id": self.strategy_id,
         }
 
         # Send the message
