@@ -3,8 +3,8 @@ import pandas as pd
 import re
 
 
-def fetch_and_merge_data(strategyid, start_time, end_time):
-    url = 'http://localhost:48080/app-api/coin/freqtrade/getData'
+def fetch_and_merge_data(strategyid, start_time, end_time, url):
+    # url = 'https://corrai.tech/app-api/coin/freqtrade/getData'
     params = {
         'strategyId': strategyid,
         'startTime': start_time,
@@ -78,12 +78,13 @@ def parse_condition_and_assign(dataframe: pd.DataFrame, condition: str, column_t
     dataframe.loc[condition_result, column_to_assign] = value_to_assign
     return dataframe
 
-# if __name__ == '__main__':
-#     # 使用示例：
-#     strategyid = 1892971586960027650
-#     start_time = "2024-02-10 00:00:00"
-#     end_time = "2024-02-10 23:59:59"
-#     df = fetch_and_merge_data(strategyid, start_time, end_time)
-#
-#     # 输出结果
-#     print(df)
+
+if __name__ == '__main__':
+    # 使用示例：
+    strategyid = 1892971586960027650
+    start_time = "2024-02-10 00:00:00"
+    end_time = "2024-02-10 23:59:59"
+    df = fetch_and_merge_data(strategyid, start_time, end_time)
+
+    # 输出结果
+    print(df)
