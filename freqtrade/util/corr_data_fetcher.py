@@ -1,6 +1,9 @@
 import requests
 import pandas as pd
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def fetch_and_merge_data(strategyid, start_time, end_time, url):
@@ -49,42 +52,33 @@ def fetch_and_merge_data(strategyid, start_time, end_time, url):
 
 def parse_condition_and_assign(dataframe: pd.DataFrame, condition: str, column_to_assign: str,
                                value_to_assign: int = 1):
-    # 解析条件字符串，假设条件是 "字段1>字段2"
-    # 使用正则表达式来提取操作符前后两部分
-    match = re.match(r'(\w+)([<>!=]=?)(\w+)', condition)
+    # 处理复合条件 (使用 | 和 & 连接的条件)
+    # condition = condition.replace("&", " and ").replace("|", " or ")
+    logger.info(f"Corr backtest input condition is: {condition}")
+    # 动态替换列名为 dataframe['column'] 格式
+    columns = dataframe.columns.tolist()
+    escaped_columns = [re.escape(col) for col in columns]
+    pattern = r'(?<!\w)(' + '|'.join(escaped_columns) + r')(?!\w)'
 
-    if not match:
-        raise ValueError(f"Invalid condition format: {condition}")
+    modified_condition = re.sub(pattern, r"dataframe['\1']", condition)
+    modified_condition = re.sub(r"(dataframe\['\w+'\][^&|()]+)", r"(\1)", modified_condition)
 
-    left_operand, operator, right_operand = match.groups()
-
-    if operator == '>':
-        condition_result = dataframe[left_operand] > dataframe[right_operand]
-    elif operator == '<':
-        condition_result = dataframe[left_operand] < dataframe[right_operand]
-    elif operator == '==':
-        condition_result = dataframe[left_operand] == dataframe[right_operand]
-    elif operator == '!=':
-        condition_result = dataframe[left_operand] != dataframe[right_operand]
-    elif operator == '>=':
-        condition_result = dataframe[left_operand] >= dataframe[right_operand]
-    elif operator == '<=':
-        condition_result = dataframe[left_operand] <= dataframe[right_operand]
-    else:
-        raise ValueError(f"Unsupported operator: {operator}")
+    logger.info(f"Corr backtest dataframe's condition is: {modified_condition}")
+    try:
+        condition_result = eval(modified_condition, {}, {"dataframe": dataframe})
+    except Exception as e:
+        raise ValueError(f"Error parsing condition: {e}")
 
     # 将计算结果赋值给指定的列
-    # column_to_assign = 'enter_long' 进场函数
+    # column_to_assign = 'enter_long' 进场信号, 'exit_long' 出场信号
     dataframe.loc[condition_result, column_to_assign] = value_to_assign
     return dataframe
 
 
-if __name__ == '__main__':
-    # 使用示例：
-    strategyid = 1892971586960027650
-    start_time = "2024-02-10 00:00:00"
-    end_time = "2024-02-10 23:59:59"
-    df = fetch_and_merge_data(strategyid, start_time, end_time)
-
-    # 输出结果
-    print(df)
+# if __name__ == '__main__':
+#     # 使用示例：
+#     df = fetch_and_merge_data(1895303419358031873, "2024-02-27 21:22:08", "2025-02-27 21:22:08",
+#                               "http://localhost:48080/app-api/coin/freqtrade/getData")
+#
+#     # 输出结果
+#     print(df)
