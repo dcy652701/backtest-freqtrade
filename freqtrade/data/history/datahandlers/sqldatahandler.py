@@ -46,7 +46,9 @@ class SqlDataHandler(IDataHandler):
         start_time_str = timerange.start_fmt
         end_time_str = timerange.stop_fmt
         sql = f"select open_time,open,high,low,close,volume from dwd_{coin_symbol}_kline_{timeframe} where open_time between '{start_time_str}' and '{end_time_str}' order by open_time"
+        logger.info("using sql "+sql+" querying data")
         df = pd.read_sql(sql, self.engine)
+        logger.info("querying data length:"+str(len(df)))
         return df
 
     def ohlcv_append(self, pair: str, timeframe: str, data: DataFrame, candle_type: CandleType) -> None:
