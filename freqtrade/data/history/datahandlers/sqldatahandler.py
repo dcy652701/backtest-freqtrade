@@ -20,7 +20,7 @@ class SqlDataHandler(IDataHandler):
 
     def __init__(self, datadir: Path):
         super().__init__(datadir)
-        self.engine = create_engine("mysql+pymysql://test_corr:test654321@194.233.65.183:39030/coin_db_test")
+        self.engine = create_engine("")
 
     @classmethod
     def _get_file_extension(cls) -> str:
