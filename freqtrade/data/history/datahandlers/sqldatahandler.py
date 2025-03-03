@@ -49,6 +49,14 @@ class SqlDataHandler(IDataHandler):
         logger.info("using sql "+sql+" querying data")
         df = pd.read_sql(sql, self.engine)
         logger.info("querying data length:"+str(len(df)))
+        df = df.astype({
+            'open': 'float',
+            'high': 'float',
+            'low': 'float',
+            'close': 'float',
+            'volume': 'float',
+            'date': 'datetime64[ns]'  # 直接转换为datetime类型
+        })
         return df
 
     def ohlcv_append(self, pair: str, timeframe: str, data: DataFrame, candle_type: CandleType) -> None:
