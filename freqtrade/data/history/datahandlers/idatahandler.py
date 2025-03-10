@@ -565,6 +565,10 @@ def get_datahandlerclass(datatype: str) -> type[IDataHandler]:
         from .parquetdatahandler import ParquetDataHandler
 
         return ParquetDataHandler
+    elif datatype == "sql":
+        from .sqldatahandler import SqlDataHandler
+
+        return SqlDataHandler
     else:
         raise ValueError(f"No datahandler for datatype {datatype} available.")
 

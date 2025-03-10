@@ -2,6 +2,7 @@ import requests
 import pandas as pd
 import logging
 import re
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +76,61 @@ def parse_condition_and_assign(dataframe: pd.DataFrame, condition: str, column_t
     return dataframe
 
 
+def upload_dataframe_to_oss(dataframe: pd.DataFrame, path: str, oss_upload_url: str) -> str:
+    """
+    将 DataFrame 转换为 CSV 并上传到 OSS。
+    :param dataframe: 需要上传的 Pandas DataFrame
+    :param path: OSS 目标路径 (如 "backtest-data/strategy_xxx_data.csv")
+    :param oss_upload_url: OSS 上传接口 URL
+    :return: 上传后的文件路径
+    """
+    # 生成与 strategy 相关的本地文件名
+    filename = path.split("/")[-1]  # 从 path 提取文件名，例如 "strategy_xxx_data.csv"
+
+    # 将 DataFrame 转换为 CSV
+    csv_buffer = io.BytesIO()
+    dataframe.to_csv(csv_buffer, index=False, encoding='utf-8')
+    csv_buffer.seek(0)
+
+    # 计算文件大小
+    # content_length = str(len(csv_buffer.getvalue()))
+    # 获取文件大小
+    csv_buffer.seek(0, io.SEEK_END)
+    file_size = csv_buffer.tell()  # 获取字节大小
+    csv_buffer.seek(0)
+
+    # 构造 multipart/form-data 请求
+    files = {'file': (filename, csv_buffer, 'text/csv')}  # 用动态 filename
+    data = {'path': path}
+    headers = {
+        'Content-Length': str(file_size),
+        'tenant-id': '1'
+    }
+
+    # 发送 POST 请求
+    response = requests.post(oss_upload_url, files=files, data=data, headers=headers)
+
+    if response.status_code == 200:
+        result = response.json()
+        if result.get("code") == 0:
+            return result["data"]  # 返回上传后的文件路径
+        else:
+            raise Exception(f"OSS 上传失败: {result}")
+    else:
+        raise Exception(f"HTTP 请求失败，状态码: {response.status_code}, 响应: {response.text}")
+
+
 # if __name__ == '__main__':
-#     # 使用示例：
-#     df = fetch_and_merge_data(1895303419358031873, "2024-02-27 21:22:08", "2025-02-27 21:22:08",
-#                               "http://localhost:48080/app-api/coin/freqtrade/getData")
-#
-#     # 输出结果
-#     print(df)
+#     data = {
+#         'open_time': [1710000000000, 1710000001000, 1710000002000],
+#         'price': [50000, 50500, 51000],
+#         'volume': [1.2, 1.5, 1.8]
+#     }
+#     df = pd.DataFrame(data)
+#     try:
+#         oss_upload_url = "http://localhost:48080/app-api/metadata/oss/upload"
+#         oss_path = f"backtest-data/User290Strategy1899107701278584834.csv"
+#         oss_file_url = upload_dataframe_to_oss(df, oss_path, oss_upload_url)
+#         logger.info(f"DataFrame 已上传到 OSS: {oss_file_url}")
+#     except Exception as e:
+#         logger.error(f"上传 DataFrame 失败: {e}")
