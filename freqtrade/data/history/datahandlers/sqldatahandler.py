@@ -48,7 +48,7 @@ class SqlDataHandler(IDataHandler):
         sql = f"select open_timestamp as date,open,high,low,close,volume from dwd_{coin_symbol}_kline_{timeframe} where open_time between '{start_time_str}' and '{end_time_str}' order by open_time"
         logger.info("using sql "+sql+" querying data")
         df = pd.read_sql(sql, self.engine)
-        logger.info("querying data length:"+str(len(df)))
+        logger.info("querying data length: "+str(len(df)))
         df = df.astype({
             'open': 'float',
             'high': 'float',
