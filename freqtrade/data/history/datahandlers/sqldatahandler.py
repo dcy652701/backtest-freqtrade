@@ -24,7 +24,7 @@ class SqlDataHandler(IDataHandler):
 
     def __init__(self, datadir: Path):
         super().__init__(datadir)
-        self.engine = create_engine(os.getenv("DB_URL"))
+        self.engine = create_engine()
 
     @classmethod
     def _get_file_extension(cls) -> str:
