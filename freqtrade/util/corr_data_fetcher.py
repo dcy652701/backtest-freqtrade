@@ -7,12 +7,13 @@ import io
 logger = logging.getLogger(__name__)
 
 
-def fetch_and_merge_data(strategyid, start_time, end_time, url):
+def fetch_and_merge_data(strategyid, start_time, end_time, url, user_id):
     # url = 'https://corrai.tech/app-api/coin/freqtrade/getData'
     params = {
         'strategyId': strategyid,
         'startTime': start_time,
-        'endTime': end_time
+        'endTime': end_time,
+        'userId': user_id
     }
     headers = {
         'tenant-id': '1'

@@ -63,3 +63,5 @@ ast-comments==1.2.2
 packaging==24.2
 
 pymysql==1.1.1
+
+dotenv

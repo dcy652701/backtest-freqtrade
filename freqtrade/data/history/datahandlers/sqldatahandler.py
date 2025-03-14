@@ -12,6 +12,10 @@ from sqlalchemy import create_engine
 from pathlib import Path
 
 import pandas as pd
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +24,8 @@ class SqlDataHandler(IDataHandler):
 
     def __init__(self, datadir: Path):
         super().__init__(datadir)
-        self.engine = create_engine("")
+        self.engine = create_engine()
+
 
     @classmethod
     def _get_file_extension(cls) -> str:
