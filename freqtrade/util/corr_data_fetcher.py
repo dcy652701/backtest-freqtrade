@@ -121,21 +121,17 @@ def upload_dataframe_to_oss(dataframe: pd.DataFrame, path: str, oss_upload_url: 
         raise Exception(f"HTTP 请求失败，状态码: {response.status_code}, 响应: {response.text}")
 
 
-if __name__ == '__main__':
-    # data = {
-    #     'open_time': [1710000000000, 1710000001000, 1710000002000],
-    #     'price': [50000, 50500, 51000],
-    #     'volume': [1.2, 1.5, 1.8]
-    # }
-    # df = pd.DataFrame(data)
-    # try:
-    #     oss_upload_url = "http://localhost:48080/app-api/metadata/oss/upload"
-    #     oss_path = f"backtest-data/User290Strategy1899107701278584834.csv"
-    #     oss_file_url = upload_dataframe_to_oss(df, oss_path, oss_upload_url)
-    #     logger.info(f"DataFrame 已上传到 OSS: {oss_file_url}")
-    # except Exception as e:
-    #     logger.error(f"上传 DataFrame 失败: {e}")
-
-    corr_data = fetch_and_merge_data(1900196814846476290, "2024-03-13 20:12:21", "2025-03-13 20:12:21",
-                                     "http://localhost:48080/app-api/coin/freqtrade/getData", 290)
-    print(corr_data)
+# if __name__ == '__main__':
+#     data = {
+#         'open_time': [1710000000000, 1710000001000, 1710000002000],
+#         'price': [50000, 50500, 51000],
+#         'volume': [1.2, 1.5, 1.8]
+#     }
+#     df = pd.DataFrame(data)
+#     try:
+#         oss_upload_url = "http://localhost:48080/app-api/metadata/oss/upload"
+#         oss_path = f"backtest-data/User290Strategy1899107701278584834.csv"
+#         oss_file_url = upload_dataframe_to_oss(df, oss_path, oss_upload_url)
+#         logger.info(f"DataFrame 已上传到 OSS: {oss_file_url}")
+#     except Exception as e:
+#         logger.error(f"上传 DataFrame 失败: {e}")
