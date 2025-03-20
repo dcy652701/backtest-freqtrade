@@ -7,11 +7,12 @@ This module contains the backtesting logic
 import logging
 from collections import defaultdict
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 from numpy import nan
 from pandas import DataFrame
+import pandas as pd
 
 from freqtrade import constants
 from freqtrade.configuration import TimeRange, validate_config_consistency
@@ -63,9 +64,13 @@ from freqtrade.plugins.protectionmanager import ProtectionManager
 from freqtrade.resolvers import ExchangeResolver, StrategyResolver
 from freqtrade.strategy.interface import IStrategy
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
-from freqtrade.util import FtPrecise
+from freqtrade.util import FtPrecise, dt_now
 from freqtrade.util.migrations import migrate_data
 from freqtrade.wallets import Wallets
+from freqtrade.optimize.cumulative_return import (
+    analyze_backtest_result, 
+    calculate_positions
+)
 
 
 logger = logging.getLogger(__name__)
@@ -396,6 +401,8 @@ class Backtesting:
         self.canceled_trade_entries = 0
         self.canceled_entry_orders = 0
         self.replaced_entry_orders = 0
+        self.canceled_exit_orders = 0
+        self.replaced_exit_orders = 0
         self.dataprovider.clear_cache()
         if enable_protections:
             self._load_protections(self.strategy)
@@ -1234,8 +1241,8 @@ class Backtesting:
         for order in [o for o in trade.orders if o.ft_is_open]:
             if order.side == trade.entry_side:
                 self.canceled_entry_orders += 1
-            # elif order.side == trade.exit_side:
-            #     self.canceled_exit_orders += 1
+            elif order.side == trade.exit_side:
+                self.canceled_exit_orders += 1
             # canceled orders are removed from the trade
             del trade.orders[trade.orders.index(order)]
 
@@ -1299,9 +1306,10 @@ class Backtesting:
         Returns True if the trade should be deleted.
         """
         # only check on new candles for open entry orders
-        if order.side == trade.entry_side and current_time > order.order_date_utc:
+        if current_time > order.order_date_utc:
+            is_entry = order.side == trade.entry_side
             requested_rate = strategy_safe_wrapper(
-                self.strategy.adjust_entry_price, default_retval=order.ft_price
+                self.strategy.adjust_order_price, default_retval=order.ft_price
             )(
                 trade=trade,  # type: ignore[arg-type]
                 order=order,
@@ -1311,6 +1319,7 @@ class Backtesting:
                 current_order_rate=order.ft_price,
                 entry_tag=trade.enter_tag,
                 side=trade.trade_direction,
+                is_entry=is_entry,
             )  # default value is current order price
 
             # cancel existing order whenever a new rate is requested (or None)
@@ -1319,22 +1328,35 @@ class Backtesting:
                 return False
             else:
                 del trade.orders[trade.orders.index(order)]
-                self.canceled_entry_orders += 1
+                if is_entry:
+                    self.canceled_entry_orders += 1
+                else:
+                    self.canceled_exit_orders += 1
 
             # place new order if result was not None
             if requested_rate:
-                self._enter_trade(
-                    pair=trade.pair,
-                    row=row,
-                    trade=trade,
-                    requested_rate=requested_rate,
-                    requested_stake=(order.safe_remaining * order.ft_price / trade.leverage),
-                    direction="short" if trade.is_short else "long",
-                )
+                if is_entry:
+                    self._enter_trade(
+                        pair=trade.pair,
+                        row=row,
+                        trade=trade,
+                        requested_rate=requested_rate,
+                        requested_stake=(order.safe_remaining * order.ft_price / trade.leverage),
+                        direction="short" if trade.is_short else "long",
+                    )
+                    self.replaced_entry_orders += 1
+                else:
+                    self._exit_trade(
+                        trade=trade,
+                        sell_row=row,
+                        close_rate=requested_rate,
+                        amount=order.safe_remaining,
+                        exit_reason=order.ft_order_tag,
+                    )
+                    self.replaced_exit_orders += 1
                 # Delete trade if no successful entries happened (if placing the new order failed)
-                if not trade.has_open_orders and trade.nr_of_successful_entries == 0:
+                if not trade.has_open_orders and is_entry and trade.nr_of_successful_entries == 0:
                     return True
-                self.replaced_entry_orders += 1
             else:
                 # assumption: there can't be multiple open entry orders at any given time
                 return trade.nr_of_successful_entries == 0
@@ -1656,7 +1678,7 @@ class Backtesting:
         self.progress.init_step(BacktestState.ANALYZE, 0)
         strategy_name = strat.get_strategy_name()
         logger.info(f"Running backtesting for Strategy {strategy_name}")
-        backtest_start_time = datetime.now(timezone.utc)
+        backtest_start_time = dt_now()
         self._set_strategy(strat)
 
         # need to reprocess data every time to populate signals
@@ -1677,13 +1699,14 @@ class Backtesting:
             f"up to {max_date.strftime(DATETIME_PRINT_FORMAT)} "
             f"({(max_date - min_date).days} days)."
         )
+        logger.info("========= corrai 20250320 =========")
         # Execute backtest and store results
         results = self.backtest(
             processed=preprocessed,
             start_date=min_date,
             end_date=max_date,
         )
-        backtest_end_time = datetime.now(timezone.utc)
+        backtest_end_time = dt_now()
         results.update(
             {
                 "run_id": self.run_ids.get(strategy_name, ""),
@@ -1705,19 +1728,21 @@ class Backtesting:
             self.analysis_results["rejected"][strategy_name] = rejected
             self.analysis_results["exited"][strategy_name] = exited
 
+        # 调用累积收益模块，打印价格数据
+        self.print_price_data(data)
         return min_date, max_date
 
     def _get_min_cached_backtest_date(self):
         min_backtest_date = None
         backtest_cache_age = self.config.get("backtest_cache", constants.BACKTEST_CACHE_DEFAULT)
-        if self.timerange.stopts == 0 or self.timerange.stopdt > datetime.now(tz=timezone.utc):
+        if self.timerange.stopts == 0 or self.timerange.stopdt > dt_now():
             logger.warning("Backtest result caching disabled due to use of open-ended timerange.")
         elif backtest_cache_age == "day":
-            min_backtest_date = datetime.now(tz=timezone.utc) - timedelta(days=1)
+            min_backtest_date = dt_now() - timedelta(days=1)
         elif backtest_cache_age == "week":
-            min_backtest_date = datetime.now(tz=timezone.utc) - timedelta(weeks=1)
+            min_backtest_date = dt_now() - timedelta(weeks=1)
         elif backtest_cache_age == "month":
-            min_backtest_date = datetime.now(tz=timezone.utc) - timedelta(weeks=4)
+            min_backtest_date = dt_now() - timedelta(weeks=4)
         return min_backtest_date
 
     def load_prior_backtest(self):
@@ -1791,3 +1816,95 @@ class Backtesting:
         if len(self.strategylist) > 0:
             # Show backtest results
             show_backtest_results(self.config, self.results)
+            
+        # 调用累积收益模块，打印价格数据
+        self.print_price_data(data)
+        
+    def print_price_data(self, data: dict[str, DataFrame]) -> None:
+        """
+        打印价格数据和调用累积收益计算模块
+        
+        :param data: 回测数据字典
+        """
+        try:
+            logger.info("正在处理价格数据用于累积收益计算...")
+            
+            # 打印数据基本信息
+            logger.info(f"已加载 {len(data)} 个交易对的价格数据")
+            
+            # 显示每个交易对的前几行数据（仅作为调试信息）
+            for pair, ohlcv_data in data.items():
+                if ohlcv_data.empty:
+                    logger.info(f"交易对 {pair} 没有数据")
+                    continue
+                
+                # logger.info(f"交易对: {pair} - 数据形状: {ohlcv_data.shape}")
+                
+                # 只显示前几个交易对，避免日志过长
+                if list(data.keys()).index(pair) >= 2:
+                    logger.info(f"还有 {len(data) - 3} 个交易对数据未显示...")
+                    break
+            
+            # 分析每个策略的回测结果
+            for strategy_name, backtest_result in self.all_results.items():
+                # logger.info(f"分析策略 {strategy_name} 的回测结果...")
+                
+                # 计算持仓和累积收益
+                positions_df = analyze_backtest_result(backtest_result, data)
+                
+                if positions_df.empty:
+                    logger.warning(f"策略 {strategy_name} 没有有效的持仓数据")
+                    continue
+                
+                # 显示结果摘要
+                logger.info(f"策略 {strategy_name} 的累积收益率计算完成:")
+                logger.info(f"回测时间范围: {positions_df.index[0]} 到 {positions_df.index[-1]}")
+                logger.info(f"最终账户价值: {positions_df['total_account_value'].iloc[-1]:.2f}")
+                logger.info(f"最终累积收益率: {positions_df['cumulative_return_pct'].iloc[-1]:.2f}%")
+                
+                # 显示每个交易对的收盘价和 buy-and-hold 收益率
+                for pair in set(backtest_result['results']['pair']):
+                    close_col = f"{pair}_close"
+                    bh_return_col = f"{pair}_bh_return_pct"
+                    
+                    if close_col in positions_df.columns and bh_return_col in positions_df.columns:
+                        final_close = positions_df[close_col].iloc[-1]
+                        final_bh_return = positions_df[bh_return_col].iloc[-1]
+                        logger.info(f"{pair} 最终收盘价: {final_close:.4f}, Buy-and-Hold 收益率: {final_bh_return:.2f}%")
+                
+                # 比较策略收益与 Buy-and-Hold 收益
+                for pair in set(backtest_result['results']['pair']):
+                    bh_return_col = f"{pair}_bh_return_pct"
+                    if bh_return_col in positions_df.columns:
+                        strategy_return = positions_df['cumulative_return_pct'].iloc[-1]
+                        bh_return = positions_df[bh_return_col].iloc[-1]
+                        outperformance = strategy_return - bh_return
+                        logger.info(f"策略相对于 {pair} Buy-and-Hold 的超额收益: {outperformance:.2f}%")
+                
+                # 输出月度收益率
+                monthly_returns = positions_df.resample('ME')['cumulative_return_pct'].last().diff()
+                logger.info("月度收益率变化 (%):")
+                # for date, monthly_return in monthly_returns.items():
+                #     if pd.notna(monthly_return):
+                #         logger.info(f"{date.strftime('%Y-%m')}: {monthly_return:.2f}%")
+
+                # 保存结果到CSV文件
+                # user_data_dir = self.config['user_data_dir']
+                # user_data_dir = './user_data'
+                # output_dir = user_data_dir + '/backtest_results/cumulative_returns'
+                output_dir = './user_data/backtest_results/cumulative_returns/'
+                # output_dir.mkdir(parents=True, exist_ok=True)
+                
+                positions_df.to_csv(
+                    output_dir + f"cumu_{strategy_name}.csv"
+                )
+                logger.info(f"账户价值和累积收益数据已保存到: {output_dir}")
+            
+            logger.info("累积收益计算完成。")
+            
+        except ImportError as e:
+            logger.error(f"导入累积收益模块时出错: {e}")
+        except Exception as e:
+            logger.error(f"处理价格数据时出错: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
