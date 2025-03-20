@@ -116,3 +116,5 @@ target/
 !config_examples/config_freqai.example.json
 
 docker-compose-*.yml
+
+freqtrade/data/history/datahandlers/sqldatahandler.py
