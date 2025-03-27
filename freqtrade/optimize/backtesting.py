@@ -1699,7 +1699,6 @@ class Backtesting:
             f"up to {max_date.strftime(DATETIME_PRINT_FORMAT)} "
             f"({(max_date - min_date).days} days)."
         )
-        logger.info("========= corrai 20250320 =========")
         # Execute backtest and store results
         results = self.backtest(
             processed=preprocessed,
@@ -1728,8 +1727,8 @@ class Backtesting:
             self.analysis_results["rejected"][strategy_name] = rejected
             self.analysis_results["exited"][strategy_name] = exited
 
-        # 调用累积收益模块，打印价格数据
-        self.print_price_data(data)
+        # # 调用累积收益模块，打印价格数据
+        # self.print_price_data(data)
         return min_date, max_date
 
     def _get_min_cached_backtest_date(self):
@@ -1774,7 +1773,7 @@ class Backtesting:
         for strat in self.strategylist:
             if self.results and strat.get_strategy_name() in self.results["strategy"]:
                 # When previous result hash matches - reuse that result and skip backtesting.
-                logger.info(f"Reusing result of previous backtest for {strat.get_strategy_name()}")
+                # logger.info(f"Reusing result of previous backtest for {strat.get_strategy_name()}")
                 continue
             min_date, max_date = self.backtest_one_strategy(strat, data, timerange)
 
@@ -1820,29 +1819,30 @@ class Backtesting:
         # 调用累积收益模块，打印价格数据
         self.print_price_data(data)
         
-    def print_price_data(self, data: dict[str, DataFrame]) -> None:
+    def print_price_data(self, data: dict[str, DataFrame]) -> DataFrame:
         """
         打印价格数据和调用累积收益计算模块
         
         :param data: 回测数据字典
         """
+        global positions_df
         try:
-            logger.info("正在处理价格数据用于累积收益计算...")
+            # logger.info("正在处理价格数据用于累积收益计算...")
             
             # 打印数据基本信息
-            logger.info(f"已加载 {len(data)} 个交易对的价格数据")
+            # logger.info(f"已加载 {len(data)} 个交易对的价格数据")
             
             # 显示每个交易对的前几行数据（仅作为调试信息）
             for pair, ohlcv_data in data.items():
                 if ohlcv_data.empty:
-                    logger.info(f"交易对 {pair} 没有数据")
+                    # logger.info(f"交易对 {pair} 没有数据")
                     continue
                 
                 # logger.info(f"交易对: {pair} - 数据形状: {ohlcv_data.shape}")
                 
                 # 只显示前几个交易对，避免日志过长
                 if list(data.keys()).index(pair) >= 2:
-                    logger.info(f"还有 {len(data) - 3} 个交易对数据未显示...")
+                    # logger.info(f"还有 {len(data) - 3} 个交易对数据未显示...")
                     break
             
             # 分析每个策略的回测结果
@@ -1853,14 +1853,14 @@ class Backtesting:
                 positions_df = analyze_backtest_result(backtest_result, data)
                 
                 if positions_df.empty:
-                    logger.warning(f"策略 {strategy_name} 没有有效的持仓数据")
+                    # logger.warning(f"策略 {strategy_name} 没有有效的持仓数据")
                     continue
                 
-                # 显示结果摘要
-                logger.info(f"策略 {strategy_name} 的累积收益率计算完成:")
-                logger.info(f"回测时间范围: {positions_df.index[0]} 到 {positions_df.index[-1]}")
-                logger.info(f"最终账户价值: {positions_df['total_account_value'].iloc[-1]:.2f}")
-                logger.info(f"最终累积收益率: {positions_df['cumulative_return_pct'].iloc[-1]:.2f}%")
+                # # 显示结果摘要
+                # logger.info(f"策略 {strategy_name} 的累积收益率计算完成:")
+                # logger.info(f"回测时间范围: {positions_df.index[0]} 到 {positions_df.index[-1]}")
+                # logger.info(f"最终账户价值: {positions_df['total_account_value'].iloc[-1]:.2f}")
+                # logger.info(f"最终累积收益率: {positions_df['cumulative_return_pct'].iloc[-1]:.2f}%")
                 
                 # 显示每个交易对的收盘价和 buy-and-hold 收益率
                 for pair in set(backtest_result['results']['pair']):
@@ -1870,7 +1870,7 @@ class Backtesting:
                     if close_col in positions_df.columns and bh_return_col in positions_df.columns:
                         final_close = positions_df[close_col].iloc[-1]
                         final_bh_return = positions_df[bh_return_col].iloc[-1]
-                        logger.info(f"{pair} 最终收盘价: {final_close:.4f}, Buy-and-Hold 收益率: {final_bh_return:.2f}%")
+                        # logger.info(f"{pair} 最终收盘价: {final_close:.4f}, Buy-and-Hold 收益率: {final_bh_return:.2f}%")
                 
                 # 比较策略收益与 Buy-and-Hold 收益
                 for pair in set(backtest_result['results']['pair']):
@@ -1879,11 +1879,11 @@ class Backtesting:
                         strategy_return = positions_df['cumulative_return_pct'].iloc[-1]
                         bh_return = positions_df[bh_return_col].iloc[-1]
                         outperformance = strategy_return - bh_return
-                        logger.info(f"策略相对于 {pair} Buy-and-Hold 的超额收益: {outperformance:.2f}%")
+                        # logger.info(f"策略相对于 {pair} Buy-and-Hold 的超额收益: {outperformance:.2f}%")
                 
                 # 输出月度收益率
                 monthly_returns = positions_df.resample('ME')['cumulative_return_pct'].last().diff()
-                logger.info("月度收益率变化 (%):")
+                # logger.info("月度收益率变化 (%):")
                 # for date, monthly_return in monthly_returns.items():
                 #     if pd.notna(monthly_return):
                 #         logger.info(f"{date.strftime('%Y-%m')}: {monthly_return:.2f}%")
@@ -1898,9 +1898,9 @@ class Backtesting:
                 positions_df.to_csv(
                     output_dir + f"cumu_{strategy_name}.csv"
                 )
-                logger.info(f"账户价值和累积收益数据已保存到: {output_dir}")
-            
-            logger.info("累积收益计算完成。")
+                # logger.info(f"账户价值和累积收益数据已保存到: {output_dir}")
+            return positions_df
+            # logger.info("累积收益计算完成。")
             
         except ImportError as e:
             logger.error(f"导入累积收益模块时出错: {e}")

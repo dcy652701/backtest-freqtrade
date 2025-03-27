@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 import numpy as np
+import pandas as pd
 from pandas import DataFrame, Series, concat, to_datetime
 
 from freqtrade.constants import BACKTEST_BREAKDOWNS, DATETIME_PRINT_FORMAT
@@ -16,6 +17,11 @@ from freqtrade.data.metrics import (
     calculate_max_drawdown,
     calculate_sharpe,
     calculate_sortino,
+    # calculate_cumulative_sharp,
+    print_price_data
+)
+from freqtrade.data.cumulative_metrics import (
+    calculate_metrics
 )
 from freqtrade.ft_types import BacktestResultType
 from freqtrade.util import decimals_per_coin, fmt_coin, get_dry_run_wallet
@@ -587,10 +593,15 @@ def generate_backtest_stats(
     market_change = calculate_market_change(btdata, "close")
     metadata = {}
     pairlist = list(btdata.keys())
+    cumulative_return = print_price_data(btdata, all_results)
+    cumulative_metrics = calculate_metrics(cumulative_return, risk_free_rate=0)
+    logger.info(cumulative_return)
     for strategy, content in all_results.items():
         strat_stats = generate_strategy_stats(
             pairlist, strategy, content, min_date, max_date, market_change=market_change
         )
+        strat_stats["cumulative_returns"] = convert_dataframe_to_dict_list(cumulative_return)
+        strat_stats["cumulative_metrics"] = cumulative_metrics
         metadata[strategy] = {
             "run_id": content["run_id"],
             "backtest_start_time": content["backtest_start_time"],
@@ -607,3 +618,12 @@ def generate_backtest_stats(
     result["strategy_comparison"] = strategy_results
 
     return result
+
+def convert_dataframe_to_dict_list(df: pd.DataFrame) -> list:
+    df = df.copy()
+    # 如果 'date' 列存在，则转换格式
+    if 'date' in df.columns:
+        df['date_ts'] = df['date'].apply(lambda x: int(x.timestamp() * 1000) if pd.notna(x) else None)
+        df['date'] = df['date'].apply(lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else None)
+    # 转换成字典列表
+    return df.to_dict(orient="records")
