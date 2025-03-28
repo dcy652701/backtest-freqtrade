@@ -5,9 +5,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from freqtrade.optimize.cumulative_return import (
-    analyze_backtest_result,
-)
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +31,7 @@ def calculate_market_change(data: dict[str, pd.DataFrame], column: str = "close"
 
 
 def combine_dataframes_by_column(
-        data: dict[str, pd.DataFrame], column: str = "close"
+    data: dict[str, pd.DataFrame], column: str = "close"
 ) -> pd.DataFrame:
     """
     Combine multiple dataframes "column"
@@ -51,7 +49,7 @@ def combine_dataframes_by_column(
 
 
 def combined_dataframes_with_rel_mean(
-        data: dict[str, pd.DataFrame], fromdt: datetime, todt: datetime, column: str = "close"
+    data: dict[str, pd.DataFrame], fromdt: datetime, todt: datetime, column: str = "close"
 ) -> pd.DataFrame:
     """
     Combine multiple dataframes "column"
@@ -71,7 +69,7 @@ def combined_dataframes_with_rel_mean(
 
 
 def combine_dataframes_with_mean(
-        data: dict[str, pd.DataFrame], column: str = "close"
+    data: dict[str, pd.DataFrame], column: str = "close"
 ) -> pd.DataFrame:
     """
     Combine multiple dataframes "column"
@@ -89,7 +87,7 @@ def combine_dataframes_with_mean(
 
 
 def create_cum_profit(
-        df: pd.DataFrame, trades: pd.DataFrame, col_name: str, timeframe: str
+    df: pd.DataFrame, trades: pd.DataFrame, col_name: str, timeframe: str
 ) -> pd.DataFrame:
     """
     Adds a column `col_name` with the cumulative profit for the given trades array.
@@ -116,7 +114,7 @@ def create_cum_profit(
 
 
 def _calc_drawdown_series(
-        profit_results: pd.DataFrame, *, date_col: str, value_col: str, starting_balance: float
+    profit_results: pd.DataFrame, *, date_col: str, value_col: str, starting_balance: float
 ) -> pd.DataFrame:
     max_drawdown_df = pd.DataFrame()
     max_drawdown_df["cumulative"] = profit_results[value_col].cumsum()
@@ -131,17 +129,17 @@ def _calc_drawdown_series(
         # NOTE: This is not completely accurate,
         # but might good enough if starting_balance is not available
         max_drawdown_df["drawdown_relative"] = (
-                                                       max_drawdown_df["high_value"] - max_drawdown_df["cumulative"]
-                                               ) / max_drawdown_df["high_value"]
+            max_drawdown_df["high_value"] - max_drawdown_df["cumulative"]
+        ) / max_drawdown_df["high_value"]
     return max_drawdown_df
 
 
 def calculate_underwater(
-        trades: pd.DataFrame,
-        *,
-        date_col: str = "close_date",
-        value_col: str = "profit_ratio",
-        starting_balance: float = 0.0,
+    trades: pd.DataFrame,
+    *,
+    date_col: str = "close_date",
+    value_col: str = "profit_ratio",
+    starting_balance: float = 0.0,
 ):
     """
     Calculate max drawdown and the corresponding close dates
@@ -173,12 +171,12 @@ class DrawDownResult:
 
 
 def calculate_max_drawdown(
-        trades: pd.DataFrame,
-        *,
-        date_col: str = "close_date",
-        value_col: str = "profit_abs",
-        starting_balance: float = 0,
-        relative: bool = False,
+    trades: pd.DataFrame,
+    *,
+    date_col: str = "close_date",
+    value_col: str = "profit_abs",
+    starting_balance: float = 0,
+    relative: bool = False,
 ) -> DrawDownResult:
     """
     Calculate max drawdown and the corresponding close dates
@@ -288,7 +286,7 @@ def calculate_expectancy(trades: pd.DataFrame) -> tuple[float, float]:
 
 
 def calculate_sortino(
-        trades: pd.DataFrame, min_date: datetime, max_date: datetime, starting_balance: float
+    trades: pd.DataFrame, min_date: datetime, max_date: datetime, starting_balance: float
 ) -> float:
     """
     Calculate sortino
@@ -316,7 +314,7 @@ def calculate_sortino(
 
 
 def calculate_sharpe(
-        trades: pd.DataFrame, min_date: datetime, max_date: datetime, starting_balance: float
+    trades: pd.DataFrame, min_date: datetime, max_date: datetime, starting_balance: float
 ) -> float:
     """
     Calculate sharpe
@@ -342,70 +340,8 @@ def calculate_sharpe(
     return sharp_ratio
 
 
-def calculate_cumulative_sharp(trades: pd.DataFrame, min_date: datetime, max_date: datetime,
-                               starting_balance: float) -> float:
-    return 0.99999999
-
-
-def print_price_data(data: dict[str, pd.DataFrame], all_results: dict[str, dict[str, pd.DataFrame | dict]]) -> pd.DataFrame:
-    """
-    打印价格数据和调用累积收益计算模块
-
-    :param data: 回测数据字典
-    """
-    global positions_df
-    try:
-        # 显示每个交易对的前几行数据（仅作为调试信息）
-        for pair, ohlcv_data in data.items():
-            if ohlcv_data.empty:
-                continue
-            # 只显示前几个交易对，避免日志过长
-            if list(data.keys()).index(pair) >= 2:
-                break
-
-        # 分析每个策略的回测结果
-        for strategy_name, backtest_result in all_results.items():
-
-            # 计算持仓和累积收益
-            positions_df = analyze_backtest_result(backtest_result, data)
-
-            if positions_df.empty:
-                # logger.warning(f"策略 {strategy_name} 没有有效的持仓数据")
-                continue
-
-            # 显示每个交易对的收盘价和 buy-and-hold 收益率
-            for pair in set(backtest_result['results']['pair']):
-                close_col = f"{pair}_close"
-                bh_return_col = f"{pair}_bh_return_pct"
-
-                if close_col in positions_df.columns and bh_return_col in positions_df.columns:
-                    final_close = positions_df[close_col].iloc[-1]
-                    final_bh_return = positions_df[bh_return_col].iloc[-1]
-                    # logger.info(f"{pair} 最终收盘价: {final_close:.4f}, Buy-and-Hold 收益率: {final_bh_return:.2f}%")
-
-            # 比较策略收益与 Buy-and-Hold 收益
-            for pair in set(backtest_result['results']['pair']):
-                bh_return_col = f"{pair}_bh_return_pct"
-                if bh_return_col in positions_df.columns:
-                    strategy_return = positions_df['cumulative_return_pct'].iloc[-1]
-                    bh_return = positions_df[bh_return_col].iloc[-1]
-                    outperformance = strategy_return - bh_return
-                    # logger.info(f"策略相对于 {pair} Buy-and-Hold 的超额收益: {outperformance:.2f}%")
-
-            # 输出月度收益率
-            monthly_returns = positions_df.resample('ME')['cumulative_return_pct'].last().diff()
-        return positions_df
-
-    except ImportError as e:
-        logger.error(f"导入累积收益模块时出错: {e}")
-    except Exception as e:
-        logger.error(f"处理价格数据时出错: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-
-
 def calculate_calmar(
-        trades: pd.DataFrame, min_date: datetime, max_date: datetime, starting_balance: float
+    trades: pd.DataFrame, min_date: datetime, max_date: datetime, starting_balance: float
 ) -> float:
     """
     Calculate calmar
