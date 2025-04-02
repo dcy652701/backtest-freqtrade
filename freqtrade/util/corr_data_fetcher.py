@@ -44,9 +44,9 @@ def fetch_and_merge_data(strategyid, start_time, end_time, url, user_id):
         if len(df.columns) > 1:  # 如果 df 不仅仅有 open_time 列
             # 合并数据，根据 open_time 合并
             merged_df = pd.merge(merged_df, df, on='open_time', how='outer')
-    # # 合并 primaryData 中的主指标数据
-    # if len(primary_df.columns) > 1:  # 确保 primary_df 不仅有 open_time 列才进行合并
-    #     merged_df = pd.merge(merged_df, primary_df, on='open_time', how='outer')
+    # 合并 primaryData 中的主指标数据
+    if len(primary_df.columns) > 1:  # 确保 primary_df 不仅有 open_time 列才进行合并
+        merged_df = pd.merge(merged_df, primary_df, on='open_time', how='outer')
     # 将 open_time 转换为日期格式，单位是毫秒，所以需要除以1000
     merged_df['date'] = pd.to_datetime(merged_df['open_time'], unit='ms', utc=True)
     # merged_df.to_csv("debug0331.csv")
@@ -143,14 +143,14 @@ def upload_dataframe_to_oss(dataframe: pd.DataFrame, path: str, oss_upload_url: 
         raise Exception(f"HTTP 请求失败，状态码: {response.status_code}, 响应: {response.text}")
 
 
-if __name__ == '__main__':
-    corr_data = fetch_and_merge_data(1906724320736051202, "2024-03-29 16:00:00", "2025-03-29 16:00:00", "http://localhost:48080/app-api/coin/freqtrade/getData", "290")
-
-    print(corr_data)
+# if __name__ == '__main__':
+    # corr_data = fetch_and_merge_data(1906724320736051202, "2024-03-29 16:00:00", "2025-03-29 16:00:00", "http://localhost:48080/app-api/coin/freqtrade/getData", "290")
+    #
+    # print(corr_data)
 
     # dataframe = pd.read_csv("User290Strategy1906724320736051202.csv")
     # conditions = {
-    #     "long": "Profit_Sum_v_1d<Profit_Sum_v_1d_lowerband_5_2_2_0",
+    #     "long": "eth_close_1h>eth_1h_sma_30",
     #     "short": None
     # }
     # dataframe = parse_condition_and_assign(dataframe, conditions, 0, "entry")
