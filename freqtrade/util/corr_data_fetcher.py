@@ -49,53 +49,31 @@ def fetch_and_merge_data(strategyid, start_time, end_time, url, user_id):
         merged_df = pd.merge(merged_df, primary_df, on='open_time', how='outer')
     # 将 open_time 转换为日期格式，单位是毫秒，所以需要除以1000
     merged_df['date'] = pd.to_datetime(merged_df['open_time'], unit='ms', utc=True)
-    # merged_df.to_csv("debug0331.csv")
     return merged_df
 
 
-def parse_condition_and_assign(dataframe: pd.DataFrame, condition: dict, trade_style: int, signal_type: str):
-    """
-    解析并在 DataFrame 中生成交易信号
-    参数:
-        dataframe: pd.DataFrame - 交易数据
-        condition: dict - 交易条件 {"long": "btc_close_1h > btc_sma_30", "short": "btc_close_1h < btc_sma_30"}
-        trade_style: int - 交易风格 (0=Long Only, 1=Short Only, 2=Long & Short)
-        signal_type: str - 交易信号类型 ("entry" 或 "exit")
-    返回:
-        pd.DataFrame - 处理后的 DataFrame
-    """
-    logger.info(f"Corr backtest input condition: {condition}")
-
+def parse_condition_and_assign(dataframe: pd.DataFrame, condition: str, column_to_assign: str,
+                               value_to_assign: int = 1):
+    # 处理复合条件 (使用 | 和 & 连接的条件)
+    # condition = condition.replace("&", " and ").replace("|", " or ")
+    logger.info(f"Corr backtest input condition is: {condition}")
+    # 动态替换列名为 dataframe['column'] 格式
     columns = dataframe.columns.tolist()
     escaped_columns = [re.escape(col) for col in columns]
     pattern = r'(?<!\w)(' + '|'.join(escaped_columns) + r')(?!\w)'
 
-    # 根据信号类型确定要写入的列名
-    long_column = "enter_long" if signal_type == "entry" else "exit_long"
-    short_column = "enter_short" if signal_type == "entry" else "exit_short"
+    modified_condition = re.sub(pattern, r"dataframe['\1']", condition)
+    modified_condition = re.sub(r"(dataframe\['\w+'\][^&|()]+)", r"(\1)", modified_condition)
 
-    # 解析 Long 信号条件
-    if trade_style in [0, 2] and condition.get("long"):  # Long Only 或 Long & Short
-        long_condition = re.sub(pattern, r"dataframe['\1']", condition["long"])
-        long_condition = re.sub(r"(dataframe\['\w+'\][^&|()]+)", r"(\1)", long_condition)
+    logger.info(f"Corr backtest dataframe's condition is: {modified_condition}")
+    try:
+        condition_result = eval(modified_condition, {}, {"dataframe": dataframe})
+    except Exception as e:
+        raise ValueError(f"Error parsing condition: {e}")
 
-        logger.info(f"Processed long {signal_type} condition: {long_condition}")
-        try:
-            dataframe.loc[eval(long_condition, {}, {"dataframe": dataframe}), long_column] = 1
-        except Exception as e:
-            raise ValueError(f"Error parsing long {signal_type} condition: {e}")
-
-    # 解析 Short 信号条件
-    if trade_style in [1, 2] and condition.get("short"):  # Short Only 或 Long & Short
-        short_condition = re.sub(pattern, r"dataframe['\1']", condition["short"])
-        short_condition = re.sub(r"(dataframe\['\w+'\][^&|()]+)", r"(\1)", short_condition)
-
-        logger.info(f"Processed short {signal_type} condition: {short_condition}")
-        try:
-            dataframe.loc[eval(short_condition, {}, {"dataframe": dataframe}), short_column] = 1
-        except Exception as e:
-            raise ValueError(f"Error parsing short {signal_type} condition: {e}")
-
+    # 将计算结果赋值给指定的列
+    # column_to_assign = 'enter_long' 进场信号, 'exit_long' 出场信号
+    dataframe.loc[condition_result, column_to_assign] = value_to_assign
     return dataframe
 
 
@@ -144,13 +122,7 @@ def upload_dataframe_to_oss(dataframe: pd.DataFrame, path: str, oss_upload_url: 
 
 
 # if __name__ == '__main__':
-    # corr_data = fetch_and_merge_data(1906724320736051202, "2024-03-29 16:00:00", "2025-03-29 16:00:00", "http://localhost:48080/app-api/coin/freqtrade/getData", "290")
-    #
-    # print(corr_data)
-
-    # dataframe = pd.read_csv("User290Strategy1906724320736051202.csv")
-    # conditions = {
-    #     "long": "eth_close_1h>eth_1h_sma_30",
-    #     "short": None
-    # }
-    # dataframe = parse_condition_and_assign(dataframe, conditions, 0, "entry")
+#     corr_data = fetch_and_merge_data(1905273721054367746, "2020-03-27 08:50:25", "2025-03-27 08:50:25",
+#                          "http://localhost:48080/app-api/coin/freqtrade/getData", "290")
+#
+#     print(corr_data)
