@@ -50,6 +50,11 @@ function updateenv() {
     SYS_ARCH=$(uname -m)
     echo "pip install in-progress. Please wait..."
     ${PYTHON} -m pip install --upgrade pip wheel setuptools
+
+    # 安装 numba 包
+    echo "Installing numba for performance optimization..."
+    ${PYTHON} -m pip install numba
+
     REQUIREMENTS_HYPEROPT=""
     REQUIREMENTS_PLOT=""
     REQUIREMENTS_FREQAI=""

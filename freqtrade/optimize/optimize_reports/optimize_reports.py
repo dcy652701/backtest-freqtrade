@@ -5,10 +5,12 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
+from numba import jit, prange
 from pandas import DataFrame, Series, concat, to_datetime
 
 from freqtrade.constants import BACKTEST_BREAKDOWNS, DATETIME_PRINT_FORMAT
-from freqtrade.data.metrics import (
+from freqtrade.data.cumulative_metrics import calculate_metrics
+from freqtrade.data.metrics import (  # calculate_cumulative_sharp,
     calculate_cagr,
     calculate_calmar,
     calculate_csum,
@@ -17,11 +19,7 @@ from freqtrade.data.metrics import (
     calculate_max_drawdown,
     calculate_sharpe,
     calculate_sortino,
-    # calculate_cumulative_sharp,
-    print_price_data
-)
-from freqtrade.data.cumulative_metrics import (
-    calculate_metrics
+    print_price_data,
 )
 from freqtrade.ft_types import BacktestResultType
 from freqtrade.util import decimals_per_coin, fmt_coin, get_dry_run_wallet
@@ -619,11 +617,103 @@ def generate_backtest_stats(
 
     return result
 
+
+@jit(nopython=True, parallel=True)
+def _convert_dates_to_timestamps(dates):
+    """使用 Numba 加速日期转换"""
+    n = len(dates)
+    timestamps = np.zeros(n, dtype=np.int64)
+    for i in prange(n):
+        if not np.isnan(dates[i]):
+            timestamps[i] = int(dates[i] * 1000)
+    return timestamps
+
+
+@jit(nopython=True, parallel=True)
+def _calculate_cumulative_returns(returns):
+    """使用 Numba 加速累计收益计算"""
+    n = len(returns)
+    cum_returns = np.zeros(n)
+    cum_returns[0] = returns[0]
+    for i in prange(1, n):
+        cum_returns[i] = cum_returns[i - 1] + returns[i]
+    return cum_returns
+
+
 def convert_dataframe_to_dict_list(df: pd.DataFrame) -> list:
+    """优化后的DataFrame转换函数"""
     df = df.copy()
-    # 如果 'date' 列存在，则转换格式
-    if 'date' in df.columns:
-        df['date_ts'] = df['date'].apply(lambda x: int(x.timestamp() * 1000) if pd.notna(x) else None)
-        df['date'] = df['date'].apply(lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else None)
-    # 转换成字典列表
+
+    # 使用 Numpy 数组进行计算
+    if "date" in df.columns:
+        dates = df["date"].values
+        timestamps = _convert_dates_to_timestamps(dates)
+
+        # 创建结果数组
+        result = np.zeros(len(df), dtype=[("date", "U10"), ("date_ts", "i8"), ("value", "f8")])
+
+        # 并行处理日期转换
+        for i in range(len(df)):
+            if not pd.isna(dates[i]):
+                result[i]["date"] = pd.Timestamp(dates[i]).strftime("%d/%m/%Y")
+                result[i]["date_ts"] = timestamps[i]
+                result[i]["value"] = df.iloc[i]["value"] if "value" in df.columns else 0.0
+
+        # 转换为字典列表
+        return result.tolist()
+
+    # 如果没有日期列，直接转换
     return df.to_dict(orient="records")
+
+
+def calculate_metrics(cumulative_returns: pd.DataFrame, risk_free_rate: float = 0.0) -> dict:
+    """优化后的指标计算函数"""
+    if cumulative_returns.empty:
+        return {"annual_return": 0.0, "volatility": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0}
+
+    # 打印列名以便调试
+    logger.info(f"DataFrame columns: {cumulative_returns.columns.tolist()}")
+
+    # 确定正确的列名
+    value_column = None
+    for col in cumulative_returns.columns:
+        if "return" in col.lower() or "value" in col.lower():
+            value_column = col
+            break
+
+    if value_column is None:
+        # 如果没有找到合适的列，使用第一列
+        value_column = cumulative_returns.columns[0]
+        logger.warning(f"Using first column '{value_column}' for calculations")
+
+    # 转换为 Numpy 数组进行计算
+    returns = cumulative_returns[value_column].values
+    cum_returns = _calculate_cumulative_returns(returns)
+
+    # 计算年化收益率
+    total_days = len(returns)
+    annual_return = (1 + cum_returns[-1]) ** (365 / total_days) - 1 if total_days > 0 else 0.0
+
+    # 计算波动率
+    daily_returns = np.diff(returns) if len(returns) > 1 else np.array([0.0])
+    volatility = np.std(daily_returns) * np.sqrt(252) if len(daily_returns) > 0 else 0.0
+
+    # 计算夏普比率
+    excess_returns = daily_returns - risk_free_rate / 252
+    sharpe_ratio = (
+        np.sqrt(252) * np.mean(excess_returns) / np.std(excess_returns)
+        if np.std(excess_returns) > 0
+        else 0.0
+    )
+
+    # 计算最大回撤
+    cummax = np.maximum.accumulate(cum_returns)
+    drawdown = (cummax - cum_returns) / (1 + cummax) if len(cum_returns) > 0 else np.array([0.0])
+    max_drawdown = np.max(drawdown) if len(drawdown) > 0 else 0.0
+
+    return {
+        "annual_return": annual_return,
+        "volatility": volatility,
+        "sharpe_ratio": sharpe_ratio,
+        "max_drawdown": max_drawdown,
+    }
