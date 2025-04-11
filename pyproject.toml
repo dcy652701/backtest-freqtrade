@@ -102,7 +102,6 @@ develop = [
   "coveralls",
   "isort",
   "mypy",
-  "pre-commit",
   "pytest-asyncio",
   "pytest-cov",
   "pytest-mock",
