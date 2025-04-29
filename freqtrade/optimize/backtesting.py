@@ -1713,6 +1713,7 @@ class Backtesting:
                 "backtest_end_time": int(backtest_end_time.timestamp()),
             }
         )
+        print("回测时间：",int(backtest_end_time.timestamp())-int(backtest_start_time.timestamp()))
         self.all_results[strategy_name] = results
 
         if (
