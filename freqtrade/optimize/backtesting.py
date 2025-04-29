@@ -68,7 +68,7 @@ from freqtrade.util import FtPrecise, dt_now
 from freqtrade.util.migrations import migrate_data
 from freqtrade.wallets import Wallets
 from freqtrade.optimize.cumulative_return import (
-    analyze_backtest_result, 
+    analyze_backtest_result,
     calculate_positions
 )
 
@@ -1759,6 +1759,7 @@ class Backtesting:
             )
 
     def start(self) -> None:
+        logger.info("backtesting.py start方法，开始执行回测")
         """
         Run backtesting end-to-end
         """
@@ -1815,63 +1816,63 @@ class Backtesting:
         if len(self.strategylist) > 0:
             # Show backtest results
             show_backtest_results(self.config, self.results)
-            
+
         # 调用累积收益模块，打印价格数据
         self.print_price_data(data)
-        
+
     def print_price_data(self, data: dict[str, DataFrame]) -> DataFrame:
         """
         打印价格数据和调用累积收益计算模块
-        
+
         :param data: 回测数据字典
         """
         global positions_df
         try:
             # logger.info("正在处理价格数据用于累积收益计算...")
-            
+
             # 打印数据基本信息
             # logger.info(f"已加载 {len(data)} 个交易对的价格数据")
-            
+
             # 显示每个交易对的前几行数据（仅作为调试信息）
             for pair, ohlcv_data in data.items():
                 if ohlcv_data.empty:
                     # logger.info(f"交易对 {pair} 没有数据")
                     continue
-                
+
                 # logger.info(f"交易对: {pair} - 数据形状: {ohlcv_data.shape}")
-                
+
                 # 只显示前几个交易对，避免日志过长
                 if list(data.keys()).index(pair) >= 2:
                     # logger.info(f"还有 {len(data) - 3} 个交易对数据未显示...")
                     break
-            
+
             # 分析每个策略的回测结果
             for strategy_name, backtest_result in self.all_results.items():
                 # logger.info(f"分析策略 {strategy_name} 的回测结果...")
-                
+
                 # 计算持仓和累积收益
                 positions_df = analyze_backtest_result(backtest_result, data)
-                
+
                 if positions_df.empty:
                     # logger.warning(f"策略 {strategy_name} 没有有效的持仓数据")
                     continue
-                
+
                 # # 显示结果摘要
                 # logger.info(f"策略 {strategy_name} 的累积收益率计算完成:")
                 # logger.info(f"回测时间范围: {positions_df.index[0]} 到 {positions_df.index[-1]}")
                 # logger.info(f"最终账户价值: {positions_df['total_account_value'].iloc[-1]:.2f}")
                 # logger.info(f"最终累积收益率: {positions_df['cumulative_return_pct'].iloc[-1]:.2f}%")
-                
+
                 # 显示每个交易对的收盘价和 buy-and-hold 收益率
                 for pair in set(backtest_result['results']['pair']):
                     close_col = f"{pair}_close"
                     bh_return_col = f"{pair}_bh_return_pct"
-                    
+
                     if close_col in positions_df.columns and bh_return_col in positions_df.columns:
                         final_close = positions_df[close_col].iloc[-1]
                         final_bh_return = positions_df[bh_return_col].iloc[-1]
                         # logger.info(f"{pair} 最终收盘价: {final_close:.4f}, Buy-and-Hold 收益率: {final_bh_return:.2f}%")
-                
+
                 # 比较策略收益与 Buy-and-Hold 收益
                 for pair in set(backtest_result['results']['pair']):
                     bh_return_col = f"{pair}_bh_return_pct"
@@ -1880,7 +1881,7 @@ class Backtesting:
                         bh_return = positions_df[bh_return_col].iloc[-1]
                         outperformance = strategy_return - bh_return
                         # logger.info(f"策略相对于 {pair} Buy-and-Hold 的超额收益: {outperformance:.2f}%")
-                
+
                 # 输出月度收益率
                 monthly_returns = positions_df.resample('ME')['cumulative_return_pct'].last().diff()
                 # logger.info("月度收益率变化 (%):")
@@ -1894,14 +1895,14 @@ class Backtesting:
                 # output_dir = user_data_dir + '/backtest_results/cumulative_returns'
                 output_dir = './user_data/backtest_results/cumulative_returns/'
                 # output_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 positions_df.to_csv(
                     output_dir + f"cumu_{strategy_name}.csv"
                 )
                 # logger.info(f"账户价值和累积收益数据已保存到: {output_dir}")
             return positions_df
             # logger.info("累积收益计算完成。")
-            
+
         except ImportError as e:
             logger.error(f"导入累积收益模块时出错: {e}")
         except Exception as e:
