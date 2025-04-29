@@ -206,14 +206,14 @@ def calculate_metrics(df: pd.DataFrame, risk_free_rate: float = 0.0) -> dict:
         raise ValueError("DataFrame must contain 'cumulative_return' column.")
 
     # Print data statistics for diagnosis
-    print(f"Data statistics:")
-    print(f"Number of data points: {len(df)}")
-    print(f"Date range: {df.index.min()} to {df.index.max()}")
-    print(f"Cumulative return range: {df['cumulative_return'].min()} to {df['cumulative_return'].max()}")
+    #print(f"Data statistics:")
+    #print(f"Number of data points: {len(df)}")
+    #print(f"Date range: {df.index.min()} to {df.index.max()}")
+    #print(f"Cumulative return range: {df['cumulative_return'].min()} to {df['cumulative_return'].max()}")
 
     # Calculate time interval
     interval = calculate_time_interval(df)
-    print(f"Average time interval: {interval}")
+    #print(f"Average time interval: {interval}")
 
     # Calculate return changes - properly handle cases with initial value of 0
     # Use cumulative return equity curve instead of original total_account_value
@@ -222,11 +222,11 @@ def calculate_metrics(df: pd.DataFrame, risk_free_rate: float = 0.0) -> dict:
     returns = equity_curve.pct_change().dropna()
 
     # Check calculated returns
-    print(f"Returns sample: {returns.head()}")
+    #print(f"Returns sample: {returns.head()}")
 
     # Filter infinity and NaN values
     returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
-    print(f"Filtered returns statistics: mean={returns.mean():.6f}, std={returns.std():.6f}, samples={len(returns)}")
+    #print(f"Filtered returns statistics: mean={returns.mean():.6f}, std={returns.std():.6f}, samples={len(returns)}")
 
     # Calculate metrics
     max_drawdown = calculate_max_drawdown(equity_curve)
